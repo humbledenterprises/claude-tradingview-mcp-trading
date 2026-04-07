@@ -42,48 +42,64 @@ If anything fails the safety check, it stops and tells you exactly which conditi
 
 ---
 
-## Setup
+## What's Happening Under the Hood
 
 ### Prerequisites
 
-The TradingView MCP from the first video must already be set up. If you haven't done that yet, [watch the first video](https://youtu.be/vIX6ztULs4U) and come back.
+- **TradingView MCP** must already be set up — that's the connection built in the [first video](https://youtu.be/vIX6ztULs4U). If you haven't done that yet, watch it first and come back.
+- **Claude Code** installed and running
+- **A BitGet account** — [sign up here](https://partner.bitget.com/bg/LewisJackson) for a $1,000 bonus on your first deposit
+- **Node.js 18+** — check with `node --version`
 
 ---
 
 ### Step 1 — Clone this repo
 
+**Mac / Linux:**
 ```bash
 git clone https://github.com/jackson-video-resources/claude-tradingview-mcp-trading
 cd claude-tradingview-mcp-trading
 ```
 
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/jackson-video-resources/claude-tradingview-mcp-trading
+cd claude-tradingview-mcp-trading
+```
+
+> No git? Install it from [git-scm.com](https://git-scm.com) — same command works after.
+
 ---
 
 ### Step 2 — Add your BitGet API credentials
 
-Copy `.env.example` to `.env`:
-
+**Mac / Linux:**
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and fill in:
+**Windows (PowerShell):**
+```powershell
+Copy-Item .env.example .env
+```
+
+Open `.env` and fill in your credentials:
 
 ```
 BITGET_API_KEY=your_api_key_here
 BITGET_SECRET_KEY=your_secret_key_here
 BITGET_PASSPHRASE=your_passphrase_here
 PORTFOLIO_VALUE_USD=1000
+MAX_TRADE_SIZE_USD=100
+MAX_TRADES_PER_DAY=3
 ```
 
 **Getting your BitGet API key:**
-- Go to your BitGet account → API Management
-- Create a new API key
+- BitGet account → API Management → Create API
+- Name it something like `claude-trading`
 - **Withdrawals: OFF** — always, no exceptions
-- **IP whitelist: ON** — add your own IP so the key only works from your machine
-- Copy the key, secret key, and passphrase into your `.env`
-
-Don't have BitGet? [Sign up here](https://partner.bitget.com/bg/LewisJackson) — $1,000 bonus on your first deposit.
+- **IP whitelist: ON** — add your IP (Google "what is my IP" if unsure)
+- Copy the key, secret key, and passphrase — the passphrase can't be recovered once you leave the page
 
 ---
 
@@ -96,12 +112,35 @@ tv_health_check
 ```
 
 **Windows:**
-See [Windows setup guide](docs/setup-windows.md) — the path to your TradingView executable is different. Full walkthrough there.
+
+TradingView on Windows installs as an `.msix` package — the executable path is different. Find it with:
+```powershell
+Get-AppxPackage -Name "TradingView*" | Select-Object -ExpandProperty InstallLocation
+```
+Then launch it manually with the CDP flag:
+```powershell
+& "C:\Users\[YourName]\...\TradingView.exe" --remote-debugging-port=9222
+```
+Full walkthrough: [docs/setup-windows.md](docs/setup-windows.md)
 
 **Linux:**
-See [Linux setup guide](docs/setup-linux.md).
 
-Your chart should be on BTCUSDT (or whatever you're trading), 4H timeframe, with your strategy indicator and RSI 14 visible.
+```bash
+# Flatpak
+flatpak run com.tradingview.TradingViewDesktop --remote-debugging-port=9222
+
+# Snap
+tradingview --remote-debugging-port=9222
+```
+Full walkthrough: [docs/setup-linux.md](docs/setup-linux.md)
+
+Once TradingView is running, verify the connection:
+```bash
+tv_health_check
+```
+Should return `cdp_connected: true`. If not — TradingView wasn't launched with the CDP flag. Close it completely and relaunch using the command above.
+
+Set your chart to: BTCUSDT (or your preferred symbol), 4H timeframe, strategy indicator + RSI 14 visible.
 
 ---
 
@@ -109,7 +148,7 @@ Your chart should be on BTCUSDT (or whatever you're trading), 4H timeframe, with
 
 Open Claude Code in the project directory and paste the full contents of [`prompts/02-one-shot-trade.md`](prompts/02-one-shot-trade.md).
 
-That's it.
+Claude takes it from there — it walks you through every remaining step interactively.
 
 ---
 
