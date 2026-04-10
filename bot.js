@@ -447,13 +447,22 @@ async function placeOandaOrder(instrument, side, units, price) {
 async function sendTelegram(message) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!token || !chatId) return;
+  if (!token || !chatId) {
+    console.log("Telegram skipped: missing token or chatId");
+    return;
+  }
   try {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    // Escape underscores for Telegram Markdown (symbol names like XAU_USD break it)
+    const safeMessage = message.replace(/_/g, "\\_");
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "Markdown" })
+      body: JSON.stringify({ chat_id: chatId, text: safeMessage, parse_mode: "Markdown" })
     });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.log("Telegram API error:", res.status, errBody);
+    }
   } catch (e) {
     console.log("Telegram error:", e.message);
   }
