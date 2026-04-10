@@ -613,6 +613,7 @@ async function run() {
   const _allSymbols = CONFIG.symbol.split(",").map(s => s.trim());
   for (const _sym of _allSymbols) {
     CONFIG.symbol = _sym;
+    try {
 
   console.log("\n── Fetching market data from OANDA ───────────────────\n");
   const candles = await fetchCandles(CONFIG.symbol, CONFIG.timeframe, 500);
@@ -716,6 +717,10 @@ async function run() {
   writeTradeCsv(logEntry);
 
   console.log("═══════════════════════════════════════════════════════════\n");
+    } catch (symbolErr) {
+      console.log("Error processing symbol " + CONFIG.symbol + ":", symbolErr.message);
+      await sendTelegram("\u274c Error on " + CONFIG.symbol + ": " + symbolErr.message);
+    }
   } // end symbol loop
 }
 
