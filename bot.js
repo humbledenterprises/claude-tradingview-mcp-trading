@@ -1,4 +1,4 @@
-/**
+h/**
  * Claude + TradingView MCP — Automated Trading Bot
  *
  * Cloud mode: runs on Railway on a schedule. Pulls candle data direct from
@@ -17,7 +17,7 @@ import { execSync } from "child_process";
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
 function checkOnboarding() {
-  // Skip onboarding wizard when running on Railway (env vars are injected directly)
+  // Skip onboarding wizard when running on Railway (env vars are injected directly)h
   if (process.env.RAILWAY_SERVICE_NAME || process.env.RAILWAY_ENVIRONMENT) {
     const exchange = (process.env.EXCHANGE || "bitget").toLowerCase();
     const credentialMap = {
@@ -148,10 +148,19 @@ async function fetchCandles(symbol, interval, limit = 100) {
   const env = process.env.OANDA_ENVIRONMENT === "live" ? "api-fxtrade" : "api-fxpractice";
   const instrument = symbol.replace("/", "_");
   const url = `https://${env}.oanda.com/v3/instruments/${instrument}/candles?granularity=${granularity}&count=${limit}&price=M`;
+  console.log("Fetching candles from:", url.split("?")[0]);
   const res = await fetch(url, {
-    headers: { "Authorization": "Bearer " + process.env.OANDA_API_KEY }
+    headers: {
+      "Authorization": "Bearer " + process.env.OANDA_API_KEY,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    }
   });
-  if (!res.ok) throw new Error(`OANDA API error: ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.text();
+    console.log("OANDA candle error:", res.status, errBody);
+    throw new Error(`OANDA API error: ${res.status} - ${errBody}`);
+  }
   const data = await res.json();
 
   return data.candles.filter((c) => c.complete).map((c) => ({
