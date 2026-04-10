@@ -17,6 +17,23 @@ import { execSync } from "child_process";
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
 function checkOnboarding() {
+  // Skip onboarding wizard when running on Railway (env vars are injected directly)
+  if (process.env.RAILWAY_SERVICE_NAME || process.env.RAILWAY_ENVIRONMENT) {
+    const exchange = (process.env.EXCHANGE || "bitget").toLowerCase();
+    const credentialMap = {
+      bitget: ["BITGET_API_KEY", "BITGET_SECRET_KEY", "BITGET_PASSPHRASE"],
+      oanda: ["OANDA_API_KEY", "OANDA_ACCOUNT_ID"],
+      kraken: ["KRAKEN_API_KEY", "KRAKEN_PRIVATE_KEY"],
+    };
+    const required = credentialMap[exchange] || credentialMap.bitget;
+    const missing = required.filter((k) => !process.env[k]);
+    if (missing.length > 0) {
+      console.log("Missing credentials:", missing.join(", "));
+      process.exit(1);
+    }
+    console.log("Running on Railway — exchange:", exchange, "— credentials OK");
+    return;
+  }
   const exchange = (process.env.EXCHANGE || "bitget").toLowerCase();
   const credentialMap = {
     bitget: ["BITGET_API_KEY", "BITGET_SECRET_KEY", "BITGET_PASSPHRASE"],
