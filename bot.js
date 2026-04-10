@@ -2,7 +2,7 @@
  * Claude + TradingView MCP — Automated Trading Bot
  *
  * Cloud mode: runs on Railway on a schedule. Pulls candle data direct from
- * Binance (free, no auth), calculates all indicators, runs safety check,
+ * OANDA (authenticated), calculates all indicators, runs safety check,
  * executes via BitGet if everything lines up.
  *
  * Local mode: run manually — node bot.js
@@ -133,32 +133,34 @@ function countTodaysTrades(log) {
 // ─── Market Data (Binance public API — free, no auth) ───────────────────────
 
 async function fetchCandles(symbol, interval, limit = 100) {
-  // Map our timeframe format to Binance interval format
-  const intervalMap = {
-    "1m": "1m",
-    "3m": "3m",
-    "5m": "5m",
-    "15m": "15m",
-    "30m": "30m",
-    "1H": "1h",
-    "4H": "4h",
-    "1D": "1d",
-    "1W": "1w",
+  // Map timeframe format to OANDA granularity
+  const granularityMap = {
+    "1m": "M1",
+    "5m": "M5",
+    "15m": "M15",
+    "30m": "M30",
+    "1H": "H1",
+    "4H": "H4",
+    "1D": "D",
+    "1W": "W",
   };
-  const binanceInterval = intervalMap[interval] || "1m";
-
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${binanceInterval}&limit=${limit}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Binance API error: ${res.status}`);
+  const granularity = granularityMap[interval] || "M15";
+  const env = process.env.OANDA_ENVIRONMENT === "live" ? "api-fxtrade" : "api-fxpractice";
+  const instrument = symbol.replace("/", "_");
+  const url = `https://${env}.oanda.com/v3/instruments/${instrument}/candles?granularity=${granularity}&count=${limit}&price=M`;
+  const res = await fetch(url, {
+    headers: { "Authorization": "Bearer " + process.env.OANDA_API_KEY }
+  });
+  if (!res.ok) throw new Error(`OANDA API error: ${res.status}`);
   const data = await res.json();
 
-  return data.map((k) => ({
-    time: k[0],
-    open: parseFloat(k[1]),
-    high: parseFloat(k[2]),
-    low: parseFloat(k[3]),
-    close: parseFloat(k[4]),
-    volume: parseFloat(k[5]),
+  return data.candles.filter((c) => c.complete).map((c) => ({
+    time: new Date(c.time).getTime(),
+    open: parseFloat(c.mid.o),
+    high: parseFloat(c.mid.h),
+    low: parseFloat(c.mid.l),
+    close: parseFloat(c.mid.c),
+    volume: c.volume,
   }));
 }
 
@@ -599,7 +601,7 @@ async function run() {
   }
 
   // Fetch candle data — need enough for EMA(8) + full session for VWAP
-  console.log("\n── Fetching market data from Binance ───────────────────\n");
+  console.log("\n── Fetching market data from OANDA ───────────────────\n");
   const candles = await fetchCandles(CONFIG.symbol, CONFIG.timeframe, 500);
   const closes = candles.map((c) => c.close);
   const price = closes[closes.length - 1];
