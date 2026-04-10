@@ -610,6 +610,10 @@ async function run() {
   }
 
   // Fetch candle data — need enough for EMA(8) + full session for VWAP
+  const _allSymbols = CONFIG.symbol.split(",").map(s => s.trim());
+  for (const _sym of _allSymbols) {
+    CONFIG.symbol = _sym;
+
   console.log("\n── Fetching market data from OANDA ───────────────────\n");
   const candles = await fetchCandles(CONFIG.symbol, CONFIG.timeframe, 500);
   const closes = candles.map((c) => c.close);
@@ -712,6 +716,7 @@ async function run() {
   writeTradeCsv(logEntry);
 
   console.log("═══════════════════════════════════════════════════════════\n");
+  } // end symbol loop
 }
 
 if (process.argv.includes("--tax-summary")) {
