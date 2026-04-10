@@ -17,7 +17,13 @@ import { execSync } from "child_process";
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
 function checkOnboarding() {
-  const required = ["BITGET_API_KEY", "BITGET_SECRET_KEY", "BITGET_PASSPHRASE"];
+  const exchange = (process.env.EXCHANGE || "bitget").toLowerCase();
+  const credentialMap = {
+    bitget: ["BITGET_API_KEY", "BITGET_SECRET_KEY", "BITGET_PASSPHRASE"],
+    oanda: ["OANDA_API_KEY", "OANDA_ACCOUNT_ID"],
+    kraken: ["KRAKEN_API_KEY", "KRAKEN_PRIVATE_KEY"],
+  };
+  const required = credentialMap[exchange] || credentialMap.bitget;
   const missing = required.filter((k) => !process.env[k]);
 
   if (!existsSync(".env")) {
@@ -367,6 +373,48 @@ async function placeBitGetOrder(symbol, side, sizeUSD, price) {
   return data.data;
 }
 
+
+// ─── OANDA Execution ───────────────────────────────────────────────
+async function placeOandaOrder(instrument, side, units, price) {
+  const env = process.env.OANDA_ENVIRONMENT === "live" ? "api-fxtrade" : "api-fxpractice";
+  const accountId = process.env.OANDA_ACCOUNT_ID;
+  const url = "https://" + env + ".oanda.com/v3/accounts/" + accountId + "/orders";
+  const orderUnits = side.toLowerCase() === "buy" ? Math.abs(units) : -Math.abs(units);
+  console.log("  Placing OANDA order:", { instrument, side, units: orderUnits });
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + process.env.OANDA_API_KEY,
+    },
+    body: JSON.stringify({
+      order: {
+        type: "MARKET",
+        instrument: instrument.replace("/", "_"),
+        units: String(orderUnits),
+        timeInForce: "FOK",
+        positionFill: "DEFAULT",
+      },
+    }),
+  });
+  const data = await response.json();
+  if (data.orderFillTransaction) {
+    console.log("  OANDA order filled:", data.orderFillTransaction.id);
+    return {
+      orderId: data.orderFillTransaction.id,
+      instrument: data.orderFillTransaction.instrument,
+      units: data.orderFillTransaction.units,
+      price: data.orderFillTransaction.price,
+      time: data.orderFillTransaction.time,
+    };
+  } else if (data.orderCancelTransaction) {
+    throw new Error("Order cancelled: " + data.orderCancelTransaction.reason);
+  } else {
+    console.log("  OANDA response:", JSON.stringify(data));
+    return data;
+  }
+}
+
 // ─── Tax CSV Logging ─────────────────────────────────────────────────────────
 
 const CSV_FILE = "trades.csv";
@@ -589,7 +637,9 @@ async function run() {
         `\n🔴 PLACING LIVE ORDER — $${tradeSize.toFixed(2)} BUY ${CONFIG.symbol}`,
       );
       try {
-        const order = await placeBitGetOrder(
+        const exchangeName = (process.env.EXCHANGE || "bitget").toLowerCase();
+        const placeOrder = exchangeName === "oanda" ? placeOandaOrder : placeBitGetOrder;
+        const order = await placeOrder(
           CONFIG.symbol,
           "buy",
           tradeSize,
