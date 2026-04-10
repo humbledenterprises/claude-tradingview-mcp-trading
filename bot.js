@@ -432,6 +432,22 @@ async function placeOandaOrder(instrument, side, units, price) {
   }
 }
 
+// === TELEGRAM NOTIFICATIONS ==============================================
+async function sendTelegram(message) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: message, parse_mode: "Markdown" })
+    });
+  } catch (e) {
+    console.log("Telegram error:", e.message);
+  }
+}
+
 // ─── Tax CSV Logging ─────────────────────────────────────────────────────────
 
 const CSV_FILE = "trades.csv";
@@ -639,8 +655,10 @@ async function run() {
     console.log(`🚫 TRADE BLOCKED`);
     console.log(`   Failed conditions:`);
     failed.forEach((f) => console.log(`   - ${f}`));
+    await sendTelegram(`🚫 *TRADE BLOCKED* | ${CONFIG.symbol}\n❌ Failed: ${failed.join(', ')}`);
   } else {
     console.log(`✅ ALL CONDITIONS MET`);
+    await sendTelegram(`📊 *SETUP DETECTED* | ${CONFIG.symbol}\n✅ All ${results.length} conditions met\n💰 Price: ${price} | Trade size: \$${tradeSize}`);
 
     if (CONFIG.paperTrading) {
       console.log(
@@ -665,8 +683,10 @@ async function run() {
         logEntry.orderPlaced = true;
         logEntry.orderId = order.orderId;
         console.log(`✅ ORDER PLACED — ${order.orderId}`);
+        await sendTelegram(`✅ *ORDER PLACED* | ${CONFIG.symbol}\n📄 Order ID: ${order.orderId}\n💰 $${tradeSize} trade executed`);
       } catch (err) {
         console.log(`❌ ORDER FAILED — ${err.message}`);
+        await sendTelegram(`❌ *ORDER FAILED* | ${CONFIG.symbol}\n${err.message}`);
         logEntry.error = err.message;
       }
     }
