@@ -1,4 +1,4 @@
-h/**
+/**
  * Claude + TradingView MCP — Automated Trading Bot
  *
  * Cloud mode: runs on Railway on a schedule. Pulls candle data direct from
@@ -17,7 +17,7 @@ import { execSync } from "child_process";
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 
 function checkOnboarding() {
-  // Skip onboarding wizard when running on Railway (env vars are injected directly)h
+  // Skip onboarding wizard when running on Railway (env vars are injected directly)
   if (process.env.RAILWAY_SERVICE_NAME || process.env.RAILWAY_ENVIRONMENT) {
     const exchange = (process.env.EXCHANGE || "bitget").toLowerCase();
     const credentialMap = {
