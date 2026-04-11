@@ -1,0 +1,40 @@
+name: Trading Bot
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run trading bot
+        env:
+          EXCHANGE: ${{ secrets.EXCHANGE }}
+          KRAKEN_API_KEY: ${{ secrets.KRAKEN_API_KEY }}
+          KRAKEN_PRIVATE_KEY: ${{ secrets.KRAKEN_PRIVATE_KEY }}
+          PORTFOLIO_VALUE_USD: ${{ secrets.PORTFOLIO_VALUE_USD }}
+          MAX_TRADE_SIZE_USD: ${{ secrets.MAX_TRADE_SIZE_USD }}
+          MAX_TRADES_PER_DAY: ${{ secrets.MAX_TRADES_PER_DAY }}
+          MIN_RISK_REWARD_RATIO: ${{ secrets.MIN_RISK_REWARD_RATIO }}
+          MAX_RISK_PER_TRADE_PCT: ${{ secrets.MAX_RISK_PER_TRADE_PCT }}
+          PAPER_TRADING: ${{ secrets.PAPER_TRADING }}
+          SYMBOLS: ${{ secrets.SYMBOLS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node bot.js
