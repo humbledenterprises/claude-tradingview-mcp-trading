@@ -26,8 +26,9 @@ jobs:
       - name: Run trading bot
         env:
           EXCHANGE: ${{ secrets.EXCHANGE }}
-          KRAKEN_API_KEY: ${{ secrets.KRAKEN_API_KEY }}
-          KRAKEN_PRIVATE_KEY: ${{ secrets.KRAKEN_PRIVATE_KEY }}
+          OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
+          OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
+          OANDA_ENVIRONMENT: ${{ secrets.OANDA_ENVIRONMENT }}
           PORTFOLIO_VALUE_USD: ${{ secrets.PORTFOLIO_VALUE_USD }}
           MAX_TRADE_SIZE_USD: ${{ secrets.MAX_TRADE_SIZE_USD }}
           MAX_TRADES_PER_DAY: ${{ secrets.MAX_TRADES_PER_DAY }}
