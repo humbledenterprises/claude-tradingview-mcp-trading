@@ -87,12 +87,12 @@ function checkOnboarding() {
   const csvPath = new URL("trades.csv", import.meta.url).pathname;
   console.log(`\n📄 Trade log: ${csvPath}`);
   console.log(
-    `   Open in Google Sheets or Excel any time — or tell Claude to move it:\n` +
+    `    Open in Google Sheets or Excel any time — or tell Claude to move it:\n` +
       `   "Move my trades.csv to ~/Desktop" or "Move it to my Documents folder"\n`,
   );
 }
 
-// ─── Config ────────────────────────────────────────────────────────────────
+// ─── Config ──────────────────────────────────────────────────────────────────
 
 const CONFIG = {
   symbol: process.env.SYMBOL || "BTCUSDT",
@@ -112,7 +112,7 @@ const CONFIG = {
 
 const LOG_FILE = "safety-check-log.json";
 
-// ─── Logging ────────────────────────────────────────────────────────────────
+// ─── Logging ──────────────────────────────────────────────────────────────────
 
 function loadLog() {
   if (!existsSync(LOG_FILE)) return { trades: [] };
@@ -130,7 +130,7 @@ function countTodaysTrades(log) {
   ).length;
 }
 
-// ─── Market Data (Binance public API — free, no auth) ───────────────────────
+// ─── Market Data (Binance public API — free, no auth) ─────────────────────────
 
 async function fetchCandles(symbol, interval, limit = 100) {
   // Map timeframe format to OANDA granularity
@@ -173,7 +173,7 @@ async function fetchCandles(symbol, interval, limit = 100) {
   }));
 }
 
-// ─── Indicator Calculations ──────────────────────────────────────────────────
+// ─── Indicator Calculations ────────────────────────────────────────────────────
 
 function calcEMA(closes, period) {
   const multiplier = 2 / (period + 1);
@@ -214,7 +214,71 @@ function calcVWAP(candles) {
   return cumVol === 0 ? null : cumTPV / cumVol;
 }
 
-// ─── Safety Check ───────────────────────────────────────────────────────────
+// ATR — Average True Range for TP/SL calculation
+function calcATR(candles, period = 14) {
+  if (candles.length < period + 1) return null;
+  const trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const tr = Math.max(
+      candles[i].high - candles[i].low,
+      Math.abs(candles[i].high - candles[i - 1].close),
+      Math.abs(candles[i].low - candles[i - 1].close)
+    );
+    trs.push(tr);
+  }
+  const recentTRs = trs.slice(-period);
+  return recentTRs.reduce((a, b) => a + b, 0) / recentTRs.length;
+}
+
+// Pip size per instrument — used to convert price distance to pips
+function getPipSize(symbol) {
+  const s = symbol.toUpperCase();
+  if (s.includes("XAU") || s.includes("GOLD")) return 0.01;       // Gold: 1 pip = $0.01
+  if (s.includes("XAG")) return 0.001;                             // Silver
+  if (s.includes("US30") || s.includes("DOW")) return 1.0;        // Dow Jones: 1 pip = 1 point
+  if (s.includes("NAS100") || s.includes("NDX")) return 1.0;      // Nasdaq: 1 pip = 1 point
+  if (s.includes("SPX") || s.includes("SP500")) return 0.1;       // S&P
+  if (s.includes("JPY")) return 0.01;                              // JPY pairs: 2 decimal
+  return 0.0001;                                                   // Standard forex: 4 decimal
+}
+
+function toPips(priceDiff, symbol) {
+  return Math.round(Math.abs(priceDiff) / getPipSize(symbol));
+}
+
+function rrRatio(tpDist, slDist) {
+  if (!slDist || slDist === 0) return "N/A";
+  return "1:" + (Math.abs(tpDist) / Math.abs(slDist)).toFixed(2);
+}
+
+// Calculate TP1/TP2/TP3 and Stop Loss based on ATR
+function calcTPSL(price, atr, bias) {
+  const slDist = atr * 1.5;
+  const tp1Dist = atr * 1.0;
+  const tp2Dist = atr * 2.0;
+  const tp3Dist = atr * 3.0;
+  if (bias === "BULLISH") {
+    return {
+      entry: price,
+      sl: price - slDist,
+      tp1: price + tp1Dist,
+      tp2: price + tp2Dist,
+      tp3: price + tp3Dist,
+      slDist, tp1Dist, tp2Dist, tp3Dist,
+    };
+  } else {
+    return {
+      entry: price,
+      sl: price + slDist,
+      tp1: price - tp1Dist,
+      tp2: price - tp2Dist,
+      tp3: price - tp3Dist,
+      slDist, tp1Dist, tp2Dist, tp3Dist,
+    };
+  }
+}
+
+// ─── Safety Check ─────────────────────────────────────────────────────────────
 
 function runSafetyCheck(price, ema8, vwap, rsi3, rules) {
   const results = [];
@@ -312,7 +376,7 @@ function runSafetyCheck(price, ema8, vwap, rsi3, rules) {
   return { results, allPass };
 }
 
-// ─── Trade Limits ────────────────────────────────────────────────────────────
+// ─── Trade Limits ──────────────────────────────────────────────────────────────
 
 function checkTradeLimits(log) {
   const todayCount = countTodaysTrades(log);
@@ -349,7 +413,7 @@ function checkTradeLimits(log) {
   return true;
 }
 
-// ─── BitGet Execution ────────────────────────────────────────────────────────
+// ─── BitGet Execution ──────────────────────────────────────────────────────────
 
 function signBitGet(timestamp, method, path, body = "") {
   const message = `${timestamp}${method}${path}${body}`;
@@ -402,7 +466,7 @@ async function placeBitGetOrder(symbol, side, sizeUSD, price) {
 }
 
 
-// ─── OANDA Execution ───────────────────────────────────────────────
+// ─── OANDA Execution ─────────────────────────────────────────────────
 async function placeOandaOrder(instrument, side, units, price) {
   const env = process.env.OANDA_ENVIRONMENT === "live" ? "api-fxtrade" : "api-fxpractice";
   const accountId = process.env.OANDA_ACCOUNT_ID;
@@ -468,7 +532,7 @@ async function sendTelegram(message) {
   }
 }
 
-// ─── Tax CSV Logging ─────────────────────────────────────────────────────────
+// ─── Tax CSV Logging ───────────────────────────────────────────────────────────
 
 const CSV_FILE = "trades.csv";
 
@@ -592,7 +656,7 @@ function generateTaxSummary() {
   console.log("─────────────────────────────────────────────────────────\n");
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+// ─── Main ──────────────────────────────────────────────────────────────────────
 
 async function run() {
   checkOnboarding();
@@ -615,8 +679,12 @@ async function run() {
   const withinLimits = checkTradeLimits(log);
   if (!withinLimits) {
     console.log("\nBot stopping — trade limits reached for today.");
+    await sendTelegram("🚫 *Bot stopped* — trade limits reached for today (" + countTodaysTrades(log) + "/" + CONFIG.maxTradesPerDay + ")");
     return;
   }
+
+  // Track results for all symbols
+  const symbolResults = [];
 
   // Fetch candle data — need enough for EMA(8) + full session for VWAP
   const _allSymbols = CONFIG.symbol.split(",").map(s => s.trim());
@@ -634,14 +702,18 @@ async function run() {
   const ema8 = calcEMA(closes, 8);
   const vwap = calcVWAP(candles);
   const rsi3 = calcRSI(closes, 3);
+  const atr = calcATR(candles, 14);
 
   console.log(`  EMA(8):  $${ema8.toFixed(2)}`);
   console.log(`  VWAP:    $${vwap ? vwap.toFixed(2) : "N/A"}`);
   console.log(`  RSI(3):  ${rsi3 ? rsi3.toFixed(2) : "N/A"}`);
+  console.log(`  ATR(14): ${atr ? "$" + atr.toFixed(2) : "N/A"}`);
 
   if (!vwap || !rsi3) {
-    console.log("\n⚠️  Not enough data to calculate indicators. Exiting.");
-    return;
+    console.log("\n⚠️  Not enough data for " + CONFIG.symbol + ". Skipping to next pair.");
+    await sendTelegram("⏳ " + CONFIG.symbol + " | Waiting for data\nPrice: $" + price.toFixed(2) + "\nEMA(8): $" + ema8.toFixed(2) + "\nVWAP: " + (vwap ? "$" + vwap.toFixed(2) : "N/A") + "\nRSI(3): " + (rsi3 ? rsi3.toFixed(2) : "N/A") + "\n⏳ Not enough indicator data yet");
+    symbolResults.push({ symbol: _sym, status: "waiting", detail: "$" + price.toFixed(2) + " — waiting for data" });
+    continue;
   }
 
   // Run safety check
@@ -661,7 +733,7 @@ async function run() {
     symbol: CONFIG.symbol,
     timeframe: CONFIG.timeframe,
     price,
-    indicators: { ema8, vwap, rsi3 },
+    indicators: { ema8, vwap, rsi3, atr },
     conditions: results,
     allPass,
     tradeSize,
@@ -680,10 +752,50 @@ async function run() {
     console.log(`🚫 TRADE BLOCKED`);
     console.log(`   Failed conditions:`);
     failed.forEach((f) => console.log(`   - ${f}`));
-    await sendTelegram(`🚫 *TRADE BLOCKED* | ${CONFIG.symbol}\n❌ Failed: ${failed.join(', ')}`);
+
+    let blockedMsg = `🚫 *TRADE BLOCKED* | ${CONFIG.symbol}\n`;
+    blockedMsg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    blockedMsg += `💰 Price: $${price.toFixed(2)}\n`;
+    blockedMsg += `📈 EMA(8): $${ema8.toFixed(2)} | VWAP: $${vwap.toFixed(2)} | RSI(3): ${rsi3.toFixed(2)}\n`;
+    blockedMsg += `\n❌ Failed conditions:\n`;
+    failed.forEach(f => blockedMsg += `   • ${f}\n`);
+    blockedMsg += `\n${results.filter(r => r.pass).length}/${results.length} conditions passed`;
+    await sendTelegram(blockedMsg);
+
+    symbolResults.push({ symbol: _sym, status: "blocked", detail: "$" + price.toFixed(2) + " — " + failed.length + " conditions failed" });
   } else {
     console.log(`✅ ALL CONDITIONS MET`);
-    await sendTelegram(`📊 *SETUP DETECTED* | ${CONFIG.symbol}\n✅ All ${results.length} conditions met\n💰 Price: ${price} | Trade size: \$${tradeSize}`);
+
+    const bias = (price > vwap && price > ema8) ? "BULLISH" : "BEARISH";
+    const side = bias === "BULLISH" ? "LONG" : "SHORT";
+    const levels = atr ? calcTPSL(price, atr, bias) : null;
+
+    let signalMsg = `📊 *TRADE SIGNAL* | ${CONFIG.symbol}\n`;
+    signalMsg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    signalMsg += `📍 Direction: *${side}*\n`;
+    signalMsg += `💰 Entry: $${price.toFixed(2)}\n`;
+    if (levels) {
+      const tp1Pips = toPips(levels.tp1Dist, CONFIG.symbol);
+      const tp2Pips = toPips(levels.tp2Dist, CONFIG.symbol);
+      const tp3Pips = toPips(levels.tp3Dist, CONFIG.symbol);
+      const slPips  = toPips(levels.slDist,  CONFIG.symbol);
+      signalMsg += `\n🎯 *Take Profit Targets:*\n`;
+      signalMsg += `   TP1: $${levels.tp1.toFixed(2)} (${tp1Pips} pips | ${rrRatio(levels.tp1Dist, levels.slDist)})\n`;
+      signalMsg += `   TP2: $${levels.tp2.toFixed(2)} (${tp2Pips} pips | ${rrRatio(levels.tp2Dist, levels.slDist)})\n`;
+      signalMsg += `   TP3: $${levels.tp3.toFixed(2)} (${tp3Pips} pips | ${rrRatio(levels.tp3Dist, levels.slDist)})\n`;
+      signalMsg += `\n🛑 *Stop Loss:* $${levels.sl.toFixed(2)} (${slPips} pips)\n`;
+    }
+    signalMsg += `\n📈 *Indicators:*\n`;
+    signalMsg += `   EMA(8): $${ema8.toFixed(2)}\n`;
+    signalMsg += `   VWAP: $${vwap.toFixed(2)}\n`;
+    signalMsg += `   RSI(3): ${rsi3.toFixed(2)}\n`;
+    if (atr) signalMsg += `   ATR(14): $${atr.toFixed(2)}\n`;
+    signalMsg += `\n✅ ${results.length}/${results.length} conditions passed\n`;
+    signalMsg += `💼 Trade size: \$${tradeSize}\n`;
+    signalMsg += `📋 Mode: ${CONFIG.paperTrading ? "PAPER" : "LIVE"}`;
+    await sendTelegram(signalMsg);
+
+    symbolResults.push({ symbol: _sym, status: "signal", detail: "$" + price.toFixed(2) + " — " + side + " signal ✅" });
 
     if (CONFIG.paperTrading) {
       console.log(
@@ -729,8 +841,22 @@ async function run() {
     } catch (symbolErr) {
       console.log("Error processing symbol " + CONFIG.symbol + ":", symbolErr.message);
       await sendTelegram("\u274c Error on " + CONFIG.symbol + ": " + symbolErr.message);
+      symbolResults.push({ symbol: _sym, status: "error", detail: symbolErr.message });
     }
   } // end symbol loop
+
+  // Send run summary
+  if (symbolResults.length > 0) {
+    let summary = `🤖 *Bot Run Summary*\n`;
+    summary += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    summary += `⏰ ${new Date().toUTCString()}\n`;
+    summary += `📋 Mode: ${CONFIG.paperTrading ? "PAPER" : "LIVE"}\n\n`;
+    for (const sr of symbolResults) {
+      const icon = sr.status === "signal" ? "📊" : sr.status === "blocked" ? "🚫" : sr.status === "error" ? "❌" : "⏳";
+      summary += `${icon} ${sr.symbol}: ${sr.detail}\n`;
+    }
+    await sendTelegram(summary);
+  }
 }
 
 if (process.argv.includes("--tax-summary")) {
